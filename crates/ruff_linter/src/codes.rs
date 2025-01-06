@@ -1116,6 +1116,9 @@ pub fn code_to_rule(linter: Linter, code: &str) -> Option<(RuleGroup, Rule)> {
         (Flake8Logging, "009") => (RuleGroup::Stable, rules::flake8_logging::rules::UndocumentedWarn),
         (Flake8Logging, "015") => (RuleGroup::Preview, rules::flake8_logging::rules::RootLoggerCall),
 
+        // tinybird
+        (Tinybird, "000") => (RuleGroup::Preview, rules::tinybird::rules::TinybirdDummy),
+
         _ => return None,
     })
 }

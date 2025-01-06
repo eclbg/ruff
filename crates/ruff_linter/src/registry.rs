@@ -208,6 +208,9 @@ pub enum Linter {
     /// [pydoclint](https://pypi.org/project/pydoclint/)
     #[prefix = "DOC"]
     Pydoclint,
+    /// [tinybird](https://tinybird.co)
+    #[prefix = "TB"]
+    Tinybird,
     /// Ruff-specific rules
     #[prefix = "RUF"]
     Ruff,

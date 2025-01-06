@@ -1,0 +1,10 @@
+---
+source: crates/ruff_linter/src/rules/tinybird/mod.rs
+snapshot_kind: text
+---
+TB000.py:1:7: TB000 Dummy tinybird diagnostic
+  |
+1 | class Potato:
+  |       ^^^^^^ TB000
+2 |     pass
+  |

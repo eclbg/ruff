@@ -12,7 +12,8 @@ use crate::rules::{
     flake8_builtins, flake8_debugger, flake8_django, flake8_errmsg, flake8_import_conventions,
     flake8_pie, flake8_pyi, flake8_pytest_style, flake8_raise, flake8_return, flake8_simplify,
     flake8_slots, flake8_tidy_imports, flake8_type_checking, mccabe, pandas_vet, pep8_naming,
-    perflint, pycodestyle, pyflakes, pygrep_hooks, pylint, pyupgrade, refurb, ruff, tryceratops,
+    perflint, pycodestyle, pyflakes, pygrep_hooks, pylint, pyupgrade, refurb, ruff, tinybird,
+    tryceratops,
 };
 use crate::settings::types::PythonVersion;
 
@@ -406,6 +407,9 @@ pub(crate) fn statement(stmt: &Stmt, checker: &mut Checker) {
                 range: _,
             },
         ) => {
+            if checker.enabled(Rule::TinybirdDummy) {
+                tinybird::rules::dummy(checker, class_def)
+            }
             if checker.enabled(Rule::NoClassmethodDecorator) {
                 pylint::rules::no_classmethod_decorator(checker, stmt);
             }
