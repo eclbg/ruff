@@ -282,30 +282,6 @@ async def main():
         reveal_type(child)  # revealed: Child
 ```
 
-## Generic classmethod with `@asynccontextmanager` and Self
-
-```py
-from contextlib import asynccontextmanager
-from typing import AsyncIterator
-from typing_extensions import Self
-
-class Base:
-    @classmethod
-    def create(cls) -> Self:
-        return cls()
-
-    @classmethod
-    @asynccontextmanager
-    async def yielder(cls) -> AsyncIterator[Self]:
-        yield cls.create()
-
-class Child(Base): ...
-
-async def main():
-    async with Child.yielder() as child:
-        reveal_type(child)  # revealed: Child
-```
-
 ## `asyncio.timeout`
 
 ```toml

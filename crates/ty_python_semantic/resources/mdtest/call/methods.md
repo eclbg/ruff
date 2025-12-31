@@ -562,6 +562,32 @@ Accessing via an instance should also work:
 reveal_type(Child4().with_pair((Child4(), "hi")))  # revealed: tuple[Child4, Literal["hi"]]
 ```
 
+### Classmethods with `typing.Self` and callable-returning decorators
+
+When a classmethod is decorated with a decorator that returns a callable type (like
+`@contextmanager`), `typing.Self` in the return type should correctly resolve to the subclass when
+accessed on a derived class.
+
+```py
+from contextlib import contextmanager
+from typing import Iterator
+from typing_extensions import Self
+
+class Base:
+    @classmethod
+    @contextmanager
+    def create(cls) -> Iterator[Self]:
+        yield cls()
+
+class Child(Base): ...
+
+with Base.create() as base:
+    reveal_type(base)  # revealed: Base
+
+with Child.create() as child:
+    reveal_type(child)  # revealed: Child
+```
+
 ## `@staticmethod`
 
 ### Basic

@@ -277,27 +277,3 @@ def main():
     with Child.yielder() as child:
         reveal_type(child)  # revealed: Child
 ```
-
-## Generic classmethod with `@contextmanager` and Self
-
-```py
-from contextlib import contextmanager
-from typing import Iterator
-from typing_extensions import Self
-
-class Base:
-    @classmethod
-    def create(cls) -> Self:
-        return cls()
-
-    @classmethod
-    @contextmanager
-    def yielder(cls) -> Iterator[Self]:
-        yield cls.create()
-
-class Child(Base): ...
-
-def main():
-    with Child.yielder() as child:
-        reveal_type(child)  # revealed: Child
-```
