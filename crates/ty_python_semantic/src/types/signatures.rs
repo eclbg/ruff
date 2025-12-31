@@ -967,21 +967,15 @@ impl<'db> Signature<'db> {
                 && let Some(typevar) = subclass_of.into_type_var()
                 && let Some(instance_ty) = self_type.to_instance(db)
             {
-                // Create a partial specialization: map only the typevar from the
-                // first parameter, leave others as None (to use defaults)
                 let typevar_identity = typevar.identity(db);
-                let types: Vec<Option<Type<'db>>> = ctx
-                    .variables(db)
-                    .map(|v| {
-                        if v.identity(db) == typevar_identity {
-                            Some(instance_ty)
-                        } else {
-                            None
-                        }
-                    })
-                    .collect();
 
-                let spec_mapping = TypeMapping::Specialization(ctx.specialize_partial(db, types));
+                // Create a specialization that only substitutes this typevar,
+                // keeping others as typevars for later inference at call time.
+                let spec_mapping = TypeMapping::Specialization(ctx.specialize_single(
+                    db,
+                    typevar_identity,
+                    instance_ty,
+                ));
 
                 parameters = parameters.apply_type_mapping_impl(
                     db,
@@ -992,8 +986,9 @@ impl<'db> Signature<'db> {
                 return_ty = return_ty
                     .map(|ty| ty.apply_type_mapping(db, &spec_mapping, TypeContext::default()));
 
-                // After specialization, remove the specialized typevars from the generic context
-                generic_context = None;
+                // Remove only the specialized typevar from the generic context,
+                // preserving any other typevars that remain unspecialized.
+                generic_context = ctx.remove_typevar(db, typevar_identity);
             }
         }
 

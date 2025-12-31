@@ -290,6 +290,27 @@ impl<'db> GenericContext<'db> {
         )
     }
 
+    /// Remove a specific typevar from this generic context by its identity.
+    ///
+    /// This is used when a typevar has been specialized (e.g., from `cls: type[T]`
+    /// in a classmethod) and should no longer be part of the generic signature.
+    pub(crate) fn remove_typevar(
+        self,
+        db: &'db dyn Db,
+        typevar_identity: BoundTypeVarIdentity<'db>,
+    ) -> Option<Self> {
+        let remaining: Vec<_> = self
+            .variables(db)
+            .filter(|bound_typevar| bound_typevar.identity(db) != typevar_identity)
+            .collect();
+
+        if remaining.is_empty() {
+            None
+        } else {
+            Some(Self::from_typevar_instances(db, remaining))
+        }
+    }
+
     /// Returns the typevars that are inferable in this generic context. This set might include
     /// more typevars than the ones directly bound by the generic context. For instance, consider a
     /// method of a generic class:
@@ -679,6 +700,32 @@ impl<'db> GenericContext<'db> {
         I::IntoIter: ExactSizeIterator,
     {
         Specialization::new(db, self, self.fill_in_defaults(db, types), None, None)
+    }
+
+    /// Creates a specialization that substitutes only a single typevar, keeping all others
+    /// as their original bound typevar types.
+    ///
+    /// This is used when binding classmethods where we know the type of `cls: type[T]` but
+    /// want to preserve other typevars for later inference at call time.
+    pub(crate) fn specialize_single(
+        self,
+        db: &'db dyn Db,
+        typevar_identity: BoundTypeVarIdentity<'db>,
+        substitution: Type<'db>,
+    ) -> Specialization<'db> {
+        let types: Box<[Type<'db>]> = self
+            .variables(db)
+            .map(|v| {
+                if v.identity(db) == typevar_identity {
+                    substitution
+                } else {
+                    // Keep the typevar as-is (not substituted)
+                    Type::TypeVar(v)
+                }
+            })
+            .collect();
+
+        Specialization::new(db, self, types, None, None)
     }
 
     pub(crate) fn normalized_impl(self, db: &'db dyn Db, visitor: &NormalizedVisitor<'db>) -> Self {
