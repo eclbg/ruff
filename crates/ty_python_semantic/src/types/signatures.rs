@@ -932,7 +932,7 @@ impl<'db> Signature<'db> {
         let binding_context = self.definition.map(BindingContext::Definition);
 
         if let Some(self_type) = self_type {
-            // 1. Existing Self-handling: replace typing.Self with the concrete self type
+            // Replace `typing.Self` with the concrete self type.
             //
             // For classmethods, self_type is a class object (e.g., type[Child] or ClassLiteral[Child]).
             // However, `Self` in return types (like `-> Iterator[Self]`) should be the *instance* type,
@@ -954,13 +954,12 @@ impl<'db> Signature<'db> {
             return_ty = return_ty
                 .map(|ty| ty.apply_type_mapping(db, &self_mapping, TypeContext::default()));
 
-            // 2. NEW: inline specialization for other typevars using the dropped `self`/`cls` param
-            // This handles cases like `cls: type[T]` where T should be inferred from self_type.
+            // Specialize typevars bound via `cls: type[T]` in classmethods.
             //
-            // We specifically handle the `type[T]` pattern used for classmethods:
+            // When a classmethod has `cls: type[T]` annotation:
             // - If the first parameter is `type[T]` (SubclassOf with a TypeVar)
             // - And self_type is a class literal (like Child)
-            // - Then specialize T to that class
+            // - Then specialize T to that class's instance type
             if let Some(ctx) = generic_context
                 && let Some(first_param) = first_param.as_ref()
                 && let Some(Type::SubclassOf(subclass_of)) = first_param.annotated_type()
