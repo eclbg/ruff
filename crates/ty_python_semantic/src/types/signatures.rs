@@ -910,20 +910,40 @@ impl<'db> Signature<'db> {
     }
 
     pub(crate) fn bind_self(&self, db: &'db dyn Db, self_type: Option<Type<'db>>) -> Self {
-        let mut parameters = self.parameters.iter().cloned().peekable();
+        let mut params_iter = self.parameters.iter().cloned().peekable();
+        let first_is_positional = params_iter.peek().is_some_and(Parameter::is_positional);
+
+        // Capture the original first parameter (before dropping it) for specialization
+        let first_param = if first_is_positional {
+            self.parameters.iter().next().cloned()
+        } else {
+            None
+        };
 
         // TODO: Theoretically, for a signature like `f(*args: *tuple[MyClass, int, *tuple[str, ...]])` with
         // a variadic first parameter, we should also "skip the first parameter" by modifying the tuple type.
-        if parameters.peek().is_some_and(Parameter::is_positional) {
-            parameters.next();
+        if first_is_positional {
+            params_iter.next();
         }
 
-        let mut parameters = Parameters::new(db, parameters);
+        let mut parameters = Parameters::new(db, params_iter);
         let mut return_ty = self.return_ty;
+        let mut generic_context = self.generic_context;
         let binding_context = self.definition.map(BindingContext::Definition);
+
         if let Some(self_type) = self_type {
+            // For classmethods, self_type is a class object (e.g., type[Child] or ClassLiteral[Child]).
+            // However, `Self` in return types (like `-> Iterator[Self]`) should be the *instance* type,
+            // not the class object. So we use `to_instance()` to get the instance type for `Self` binding.
+            // For regular methods, self_type is already an instance, so we use it directly.
+            let is_classmethod = self_type.is_class_object();
+            let self_type_for_binding = if is_classmethod {
+                self_type.to_instance(db).unwrap_or(self_type)
+            } else {
+                self_type
+            };
             let self_mapping = TypeMapping::BindSelf {
-                self_type,
+                self_type: self_type_for_binding,
                 binding_context,
             };
             parameters = parameters.apply_type_mapping_impl(
@@ -934,11 +954,46 @@ impl<'db> Signature<'db> {
             );
             return_ty = return_ty
                 .map(|ty| ty.apply_type_mapping(db, &self_mapping, TypeContext::default()));
+
+            // Specialize typevars bound via `cls: type[T]` in classmethods.
+            // When a classmethod has `cls: type[T]` annotation:
+            // - If the first parameter is `type[T]` (SubclassOf with a TypeVar)
+            // - And self_type is a class literal (like Child)
+            // - Then specialize T to that class's instance type
+            if is_classmethod
+                && let Some(ctx) = generic_context
+                && let Some(first_param) = first_param.as_ref()
+                && let Some(Type::SubclassOf(subclass_of)) = first_param.annotated_type()
+                && let Some(typevar) = subclass_of.into_type_var()
+                && let Some(instance_ty) = self_type.to_instance(db)
+            {
+                let typevar_identity = typevar.identity(db);
+
+                // Create a specialization that only substitutes this typevar,
+                // keeping others as typevars for later inference at call time.
+                let spec_mapping = TypeMapping::Specialization(ctx.specialize_single(
+                    db,
+                    typevar_identity,
+                    instance_ty,
+                ));
+
+                parameters = parameters.apply_type_mapping_impl(
+                    db,
+                    &spec_mapping,
+                    TypeContext::default(),
+                    &ApplyTypeMappingVisitor::default(),
+                );
+                return_ty = return_ty
+                    .map(|ty| ty.apply_type_mapping(db, &spec_mapping, TypeContext::default()));
+
+                // Remove only the specialized typevar from the generic context,
+                // preserving any other typevars that remain unspecialized.
+                generic_context = ctx.remove_typevar(db, typevar_identity);
+            }
         }
+
         Self {
-            generic_context: self
-                .generic_context
-                .map(|generic_context| generic_context.remove_self(db, binding_context)),
+            generic_context: generic_context.map(|gc| gc.remove_self(db, binding_context)),
             definition: self.definition,
             parameters,
             return_ty,

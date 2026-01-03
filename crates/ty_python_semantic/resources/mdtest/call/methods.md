@@ -480,6 +480,114 @@ class Derived(Base):
 reveal_type(Derived.custom_attribute)  # revealed: int
 ```
 
+### Generic classmethods with `cls: type[T]`
+
+When a classmethod has `cls: type[T]` annotation, the typevar T should be specialized based on the
+class the method is accessed from:
+
+```py
+from typing import TypeVar
+
+T = TypeVar("T", bound="Base")
+
+class Base:
+    @classmethod
+    def create(cls: type[T]) -> T:
+        return cls()
+
+class Child(Base): ...
+
+reveal_type(Base.create())  # revealed: Base
+reveal_type(Child.create())  # revealed: Child
+```
+
+When a classmethod has multiple typevars, only the one from `cls: type[T]` should be specialized;
+other typevars should remain generic and be inferred from call arguments:
+
+```py
+from typing import TypeVar
+
+T = TypeVar("T", bound="Base2")
+U = TypeVar("U")
+
+class Base2:
+    @classmethod
+    def with_value(cls: type[T], value: U) -> tuple[T, U]:
+        return (cls(), value)
+
+class Child2(Base2): ...
+
+reveal_type(Child2.with_value(42))  # revealed: tuple[Child2, Literal[42]]
+reveal_type(Child2.with_value("hello"))  # revealed: tuple[Child2, Literal["hello"]]
+```
+
+The specialized T should also be used for type checking other parameters, not just the return type:
+
+```py
+from typing import TypeVar
+
+T = TypeVar("T", bound="Base3")
+
+class Base3:
+    @classmethod
+    def with_fallback(cls: type[T], fallback: T) -> T:
+        return fallback
+
+class Child3(Base3): ...
+
+reveal_type(Child3.with_fallback(Child3()))  # revealed: Child3
+```
+
+When T appears in a compound parameter type, it should be correctly specialized:
+
+```py
+from typing import TypeVar
+
+T = TypeVar("T", bound="Base4")
+U = TypeVar("U")
+
+class Base4:
+    @classmethod
+    def with_pair(cls: type[T], value: tuple[T, U]) -> tuple[T, U]:
+        return value
+
+class Child4(Base4): ...
+
+reveal_type(Child4.with_pair((Child4(), 42)))  # revealed: tuple[Child4, Literal[42]]
+```
+
+Accessing via an instance should also work:
+
+```py
+reveal_type(Child4().with_pair((Child4(), "hi")))  # revealed: tuple[Child4, Literal["hi"]]
+```
+
+### Classmethods with `typing.Self` and callable-returning decorators
+
+When a classmethod is decorated with a decorator that returns a callable type (like
+`@contextmanager`), `typing.Self` in the return type should correctly resolve to the subclass when
+accessed on a derived class.
+
+```py
+from contextlib import contextmanager
+from typing import Iterator
+from typing_extensions import Self
+
+class Base:
+    @classmethod
+    @contextmanager
+    def create(cls) -> Iterator[Self]:
+        yield cls()
+
+class Child(Base): ...
+
+with Base.create() as base:
+    reveal_type(base)  # revealed: Base
+
+with Child.create() as child:
+    reveal_type(child)  # revealed: Child
+```
+
 ## `@staticmethod`
 
 ### Basic
