@@ -932,15 +932,16 @@ impl<'db> Signature<'db> {
         let binding_context = self.definition.map(BindingContext::Definition);
 
         if let Some(self_type) = self_type {
-            // Replace `typing.Self` with the concrete self type.
-            //
             // For classmethods, self_type is a class object (e.g., type[Child] or ClassLiteral[Child]).
             // However, `Self` in return types (like `-> Iterator[Self]`) should be the *instance* type,
             // not the class object. So we use `to_instance()` to get the instance type for `Self` binding.
-            //
-            // For regular methods, self_type is already an instance, and `to_instance()` returns None,
-            // so we fall back to using self_type directly.
-            let self_type_for_binding = self_type.to_instance(db).unwrap_or(self_type);
+            // For regular methods, self_type is already an instance, so we use it directly.
+            let is_classmethod = self_type.is_class_object();
+            let self_type_for_binding = if is_classmethod {
+                self_type.to_instance(db).unwrap_or(self_type)
+            } else {
+                self_type
+            };
             let self_mapping = TypeMapping::BindSelf {
                 self_type: self_type_for_binding,
                 binding_context,
@@ -955,12 +956,12 @@ impl<'db> Signature<'db> {
                 .map(|ty| ty.apply_type_mapping(db, &self_mapping, TypeContext::default()));
 
             // Specialize typevars bound via `cls: type[T]` in classmethods.
-            //
             // When a classmethod has `cls: type[T]` annotation:
             // - If the first parameter is `type[T]` (SubclassOf with a TypeVar)
             // - And self_type is a class literal (like Child)
             // - Then specialize T to that class's instance type
-            if let Some(ctx) = generic_context
+            if is_classmethod
+                && let Some(ctx) = generic_context
                 && let Some(first_param) = first_param.as_ref()
                 && let Some(Type::SubclassOf(subclass_of)) = first_param.annotated_type()
                 && let Some(typevar) = subclass_of.into_type_var()
