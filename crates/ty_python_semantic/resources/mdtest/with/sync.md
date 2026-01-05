@@ -249,3 +249,31 @@ def main_generator():
     with connect_generator() as session:
         reveal_type(session)  # revealed: Session
 ```
+
+## Generic classmethod with `@contextmanager` and TypeVar
+
+Generic classmethods with `@contextmanager` should correctly infer the type parameter when called on
+subclasses:
+
+```py
+from contextlib import contextmanager
+from typing import Iterator, TypeVar
+
+T = TypeVar("T", bound="Base")
+
+class Base:
+    @classmethod
+    def create(cls: type[T]) -> T:
+        return cls()
+
+    @classmethod
+    @contextmanager
+    def yielder(cls: type[T]) -> Iterator[T]:
+        yield cls.create()
+
+class Child(Base): ...
+
+def main():
+    with Child.yielder() as child:
+        reveal_type(child)  # revealed: Child
+```
