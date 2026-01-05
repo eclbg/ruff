@@ -195,3 +195,57 @@ class Manager:
 with Manager():
     ...
 ```
+
+## `@contextmanager`
+
+```py
+from contextlib import contextmanager
+from typing import Generator
+
+class Session: ...
+
+@contextmanager
+def connect() -> Generator[Session]:
+    yield Session()
+
+# revealed: () -> _GeneratorContextManager[Session, None, None]
+reveal_type(connect)
+
+def main():
+    with connect() as session:
+        reveal_type(session)  # revealed: Session
+```
+
+This also works with `Iterator` return types:
+
+```py
+from typing import Iterator
+
+@contextmanager
+def connect_iterator() -> Iterator[Session]:
+    yield Session()
+
+# revealed: () -> _GeneratorContextManager[Session, None, None]
+reveal_type(connect_iterator)
+
+def main_iterator():
+    with connect_iterator() as session:
+        reveal_type(session)  # revealed: Session
+```
+
+And with `GeneratorType` return types:
+
+```py
+from types import GeneratorType
+
+@contextmanager
+def connect_generator() -> GeneratorType[Session]:
+    yield Session()
+
+# revealed: () -> _GeneratorContextManager[Session, None, None]
+reveal_type(connect_generator)
+
+def main_generator():
+    with connect_generator() as session:
+        reveal_type(session)  # revealed: Session
+```
