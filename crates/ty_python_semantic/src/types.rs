@@ -2657,9 +2657,10 @@ impl<'db> Type<'db> {
                 return if instance.is_none(db) && callable.is_function_like(db) {
                     Some((self, AttributeKind::NormalOrNonDataDescriptor))
                 } else {
-                    // For classmethod-like callables, bind to the owner class. For function-like callables, bind to the instance.
-                    let self_type = if callable.is_classmethod_like(db) && instance.is_none(db) {
-                        owner.to_instance(db).unwrap_or(owner)
+                    // For classmethod-like callables, bind to the owner class (which is the class object).
+                    // For function-like callables, bind to the instance.
+                    let self_type = if callable.is_classmethod_like(db) {
+                        owner
                     } else {
                         instance
                     };
